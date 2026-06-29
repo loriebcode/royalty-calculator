@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Split Sheet — Royalty Calculator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="ledger-line"></div>
+
+    <header class="masthead">
+        <div class="masthead-inner">
+            <p class="eyebrow">AI Girl Records &middot; Songmaster Tools</p>
+            <h1>Split Sheet</h1>
+            <p class="subhead">Know exactly who gets paid, and how much, before anyone signs.</p>
+        </div>
+    </header>
+
+    <main class="sheet-wrap">
+
+        {% if error %}
+        <div class="alert">
+            <span class="alert-mark">!</span>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <form action="/calculate" method="post" class="split-form">
+
+            <section class="form-block">
+                <h2><span class="num">01</span> Total royalty amount</h2>
+                <div class="field">
+                    <label for="total_amount">Amount to split</label>
+                    <div class="money-input">
+                        <span class="prefix">$</span>
+                        <input type="number" step="0.01" min="0" id="total_amount" name="total_amount"
+                               placeholder="1000.00" value="{{ total_amount if total_amount else '' }}" required>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-block">
+                <h2><span class="num">02</span> Writer's &amp; publisher's share</h2>
+                <p class="hint">Industry standard is 50/50, but some deals differ. Must total 100%.</p>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="writer_share_percent">Writer's share %</label>
+                        <input type="number" step="0.01" min="0" max="100" id="writer_share_percent"
+                               name="writer_share_percent" value="{{ writer_share_percent if writer_share_percent else 50 }}" required>
+                    </div>
+                    <div class="field">
+                        <label for="publisher_share_percent">Publisher's share %</label>
+                        <input type="number" step="0.01" min="0" max="100" id="publisher_share_percent"
+                               name="publisher_share_percent" value="{{ publisher_share_percent if publisher_share_percent else 50 }}" required>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-block">
+                <h2><span class="num">03</span> Writers</h2>
+                <p class="hint">Everyone who contributed to the lyrics or composition. Percentages must total 100%.</p>
+                <div id="writers-list" class="contributor-list">
+                    {% if writers %}
+                        {% for w in writers %}
+                        <div class="contributor-row">
+                            <input type="text" name="writer_name" placeholder="Name" value="{{ w.name }}" required>
+                            <div class="pct-input">
+                                <input type="number" step="0.01" min="0" max="100" name="writer_percentage" placeholder="%" value="{{ w.percentage }}" required>
+                                <span>%</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="contributor-row">
+                            <input type="text" name="writer_name" placeholder="Name" required>
+                            <div class="pct-input">
+                                <input type="number" step="0.01" min="0" max="100" name="writer_percentage" placeholder="%" required>
+                                <span>%</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                <button type="button" class="add-row" data-target="writers-list" data-name="writer_name" data-pct="writer_percentage">+ Add another writer</button>
+            </section>
+
+            <section class="form-block">
+                <h2><span class="num">04</span> Publishers</h2>
+                <p class="hint">Whoever administers the publishing — often you, via your own publishing entity, if self-published.</p>
+                <div id="publishers-list" class="contributor-list">
+                    {% if publishers %}
+                        {% for p in publishers %}
+                        <div class="contributor-row">
+                            <input type="text" name="publisher_name" placeholder="Name" value="{{ p.name }}" required>
+                            <div class="pct-input">
+                                <input type="number" step="0.01" min="0" max="100" name="publisher_percentage" placeholder="%" value="{{ p.percentage }}" required>
+                                <span>%</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="contributor-row">
+                            <input type="text" name="publisher_name" placeholder="Name" required>
+                            <div class="pct-input">
+                                <input type="number" step="0.01" min="0" max="100" name="publisher_percentage" placeholder="%" required>
+                                <span>%</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                <button type="button" class="add-row" data-target="publishers-list" data-name="publisher_name" data-pct="publisher_percentage">+ Add another publisher</button>
+            </section>
+
+            <button type="submit" class="calculate-btn">Calculate split</button>
+        </form>
+
+        {% if results %}
+        <section class="results">
+            <div class="results-stub">
+                <p class="eyebrow">Result</p>
+                <h2>Who gets paid</h2>
+            </div>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Share</th>
+                        <th>% of share</th>
+                        <th>% of total</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in results %}
+                    <tr>
+                        <td class="name-cell">{{ r.name }}</td>
+                        <td><span class="tag tag-{{ 'writer' if r.share_type.startswith('Writer') else 'publisher' }}">{{ r.share_type }}</span></td>
+                        <td class="num-cell">{{ "%.2f"|format(r.percentage_of_share) }}%</td>
+                        <td class="num-cell">{{ "%.2f"|format(r.percentage_of_total) }}%</td>
+                        <td class="amount-cell">${{ "{:,.2f}".format(r.dollar_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4">Total</td>
+                        <td class="amount-cell">${{ "{:,.2f}".format(total_amount) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+        {% endif %}
+
+    </main>
+
+    <footer class="page-footer">
+        <p>Built by AI Girl LLC &middot; For estimation purposes only — not a substitute for a signed split sheet or legal advice.</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
